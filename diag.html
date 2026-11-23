@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diagnostic</title>
+<script>
+  // catches every error on this page, including files that fail to load
+  window.addEventListener("error", function (e) {
+    var what = e.target && e.target.src ? "FAILED TO LOAD: " + e.target.src : "JS ERROR: " + e.message;
+    document.addEventListener("DOMContentLoaded", function () { log(what); });
+    if (document.getElementById("out")) log(what);
+  }, true);
+</script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</head>
+<body style="font-family:system-ui;padding:16px">
+<h2>Diagnostic</h2>
+<p>Wait 10 seconds, then take a screenshot of this whole page.</p>
+<pre id="out" style="white-space:pre-wrap;font-size:14px"></pre>
+<script>
+function log(t) { document.getElementById("out").textContent += t + "\n"; }
+
+async function run() {
+  log("1. Firebase library loaded: " + (typeof firebase !== "undefined" ? "YES" : "NO"));
+  var files = ["index.html", "style.css", "firebase-config.js", "auth.js", "db.js", "app.js"];
+  for (var i = 0; i < files.length; i++) {
+    try {
+      var r = await fetch(files[i] + "?t=" + Date.now());
+      var txt = await r.text();
+      log("2. " + files[i] + ": " + r.status + ", " + txt.length + " characters");
+      if (files[i] === "index.html") {
+        log("   index.html has correct Firebase links: " + (txt.indexOf("firebasejs/10.12.2/firebase-app-compat.js") > -1 ? "YES" : "NO (old file!)"));
+      }
+      if (files[i] === "app.js") {
+        log("   app.js is the new version: " + (txt.indexOf("window.msgTimer") > -1 ? "YES" : "NO (old file)"));
+      }
+    } catch (e) { log("2. " + files[i] + ": ERROR " + e.message); }
+  }
+  if (typeof firebase === "undefined") { log("STOP: Firebase did not load."); return; }
+  firebase.initializeApp({
+    apiKey: "AIzaSyBzmTkuBHPxKlYKBqMUh2Zg_ajrh0aefIQ",
+    authDomain: "blood-donation-app-b3796.firebaseapp.com",
+    projectId: "blood-donation-app-b3796",
+    appId: "1:1079804425995:web:58149dc5be5a4d7872940e"
+  });
+  try {
+    await firebase.auth().signInWithEmailAndPassword("test@test.com", "wrong-pass-123");
+    log("3. Login test: unexpectedly worked");
+  } catch (e) {
+    log("3. Login test result: " + e.code);
+  }
+  log("Done.");
+}
+window.addEventListener("load", run);
+</script>
+</body>
+</html>

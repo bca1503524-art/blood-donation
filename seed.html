@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sample data</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</head>
+<body>
+<main>
+  <h2>Sample data for the demo</h2>
+  <p>Adds 20 made-up people (14 donors, 6 recipients) with donations and blood requests, so the admin dashboard has something to show. Log in with the admin account first.</p>
+  <form id="form">
+    <label>Admin email <input type="email" id="email" required></label>
+    <label>Admin password <input type="password" id="pass" required></label>
+    <button type="submit">Log in</button>
+  </form>
+  <div id="actions" class="row hidden" style="margin-top:16px">
+    <button id="add">Add sample data</button>
+    <button id="remove" class="secondary">Remove sample data</button>
+  </div>
+  <pre id="log" style="white-space:pre-wrap; margin-top:16px"></pre>
+</main>
+
+<script src="firebase-config.js"></script>
+<script>
+// seed.js: puts made-up demo data into Firestore. Every record has sample:true so it can be removed again.
+const log = t => { document.getElementById("log").textContent += t + "\n"; };
+const daysAgo = n => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+
+// name, blood group, city, phone
+const donors = [
+  ["Rahul Sharma", "O+", "Patna", "9876501234"], ["Priya Singh", "A+", "Ranchi", "9934127781"],
+  ["Amit Kumar", "B+", "Delhi", "9810045512"], ["Sneha Verma", "AB+", "Mumbai", "9820178843"],
+  ["Vikram Yadav", "O-", "Patna", "9031264470"], ["Anjali Gupta", "A-", "Lucknow", "9415530926"],
+  ["Rohit Mishra", "B-", "Kolkata", "9830612357"], ["Pooja Das", "O+", "Ranchi", "9709845231"],
+  ["Sanjay Prasad", "A+", "Patna", "9122067845"], ["Neha Kumari", "B+", "Jaipur", "9929341168"],
+  ["Arjun Reddy", "AB-", "Hyderabad", "9848276530"], ["Kavita Joshi", "O+", "Pune", "9823456019"],
+  ["Manish Tiwari", "A+", "Varanasi", "9452318876"], ["Ritu Sinha", "B+", "Patna", "9835214409"]
+];
+const recipients = ["Deepak Rana", "Sunita Devi", "Karan Malhotra", "Meena Kapoor", "Faisal Khan", "Alok Pandey"];
+
+// donor number (1-14), days ago, units, place, verified?
+const donations = [
+  [1, 20, 1, "City Hospital, Patna", true], [1, 160, 1, "Red Cross, Patna", true],
+  [2, 45, 1, "Red Cross, Ranchi", true], [3, 150, 1, "AIIMS, Delhi", true],
+  [4, 200, 1, "Blood Camp, Mumbai", true], [5, 100, 1, "PMCH, Patna", true],
+  [6, 300, 1, "KGMU, Lucknow", true], [8, 60, 1, "RIMS, Ranchi", true],
+  [9, 130, 1, "Blood Camp, Patna", true],
+  [10, 2, 1, "Mahavir Hospital, Jaipur", false], [12, 1, 1, "Ruby Hall, Pune", false],
+  [13, 3, 1, "BHU Hospital, Varanasi", false], [14, 0, 1, "IGIMS, Patna", false]
+];
+
+// recipient number (1-6), blood group, units, city, hospital, status, days ago
+const requests = [
+  [1, "O+", 2, "Patna", "PMCH, Patna", "pending", 3], [2, "A+", 1, "Ranchi", "RIMS, Ranchi", "pending", 1],
+  [3, "B-", 1, "Delhi", "AIIMS, Delhi", "pending", 0], [4, "AB+", 2, "Mumbai", "Tata Memorial, Mumbai", "approved", 5],
+  [5, "O-", 1, "Patna", "IGIMS, Patna", "fulfilled", 12], [1, "B+", 1, "Patna", "Ruban Hospital, Patna", "fulfilled", 20],
+  [2, "A-", 2, "Lucknow", "SGPGI, Lucknow", "fulfilled", 30], [6, "AB-", 1, "Hyderabad", "Apollo, Hyderabad", "rejected", 8]
+];
+
+async function addSample() {
+  const batch = db.batch();
+  const mail = n => n.toLowerCase().replace(/ /g, ".") + "@sample.example";
+  const now = new Date().toISOString();
+
+  donors.forEach((d, i) => {
+    const id = "sample-d" + (i + 1);
+    const mine = donations.filter(x => x[0] === i + 1 && x[4]);          // verified donations of this donor
+    const last = mine.length ? daysAgo(Math.min(...mine.map(x => x[1]))) : "";
+    batch.set(db.collection("users").doc(id), { name: d[0], email: mail(d[0]), role: "donor", createdAt: now, sample: true });
+    batch.set(db.collection("donors").doc(id), {
+      uid: id, name: d[0], bloodGroup: d[1], city: d[2], phone: d[3],
+      lastDonationDate: last, available: i % 5 !== 4, points: mine.length * 10, sample: true
+    });
+  });
+  recipients.forEach((name, i) => {
+    batch.set(db.collection("users").doc("sample-r" + (i + 1)),
+      { name: name, email: mail(name), role: "recipient", createdAt: now, sample: true });
+  });
+  donations.forEach((x, i) => {
+    batch.set(db.collection("donations").doc("sample-don-" + (i + 1)), {
+      donorId: "sample-d" + x[0], donorName: donors[x[0] - 1][0], date: daysAgo(x[1]),
+      units: x[2], place: x[3], verified: x[4], sample: true });
+  });
+  requests.forEach((x, i) => {
+    batch.set(db.collection("requests").doc("sample-req-" + (i + 1)), {
+      requesterId: "sample-r" + x[0], requesterName: recipients[x[0] - 1], bloodGroup: x[1], units: x[2],
+      city: x[3], hospital: x[4], status: x[5],
+      createdAt: new Date(Date.now() - x[6] * 86400000).toISOString(), sample: true });
+  });
+  await batch.commit();
+  log("Done. Added 14 donors, 6 recipients, " + donations.length + " donations and " + requests.length + " requests.");
+}
+
+async function removeSample() {
+  let count = 0;
+  for (const name of ["users", "donors", "donations", "requests"]) {
+    const snap = await db.collection(name).where("sample", "==", true).get();
+    for (const doc of snap.docs) { await doc.ref.delete(); count++; }
+  }
+  log("Removed " + count + " sample records.");
+}
+
+document.getElementById("form").addEventListener("submit", async function (e) {
+  e.preventDefault();
+  try {
+    const cred = await auth.signInWithEmailAndPassword(document.getElementById("email").value.trim(), document.getElementById("pass").value);
+    const me = await db.collection("users").doc(cred.user.uid).get();
+    if (!me.exists || me.data().role !== "admin") { log("This account is not an admin."); await auth.signOut(); return; }
+    log("Logged in as admin.");
+    document.getElementById("actions").classList.remove("hidden");
+    this.classList.add("hidden");
+  } catch (err) { log("ERROR: " + err.message); }
+});
+document.getElementById("add").onclick = () => addSample().catch(err => log("ERROR: " + err.message));
+document.getElementById("remove").onclick = () => removeSample().catch(err => log("ERROR: " + err.message));
+</script>
+</body>
+</html>
